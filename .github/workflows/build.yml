@@ -1,0 +1,22 @@
+name: Windows build
+on:
+  push:
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+      - name: Build
+        run: dotnet build -c Release
+      - name: Self-tests
+        shell: pwsh
+        run: |
+          $p = Start-Process .\bin\Release\net8.0-windows\win-x64\Folio.exe -ArgumentList '--self-test' -Wait -PassThru
+          Get-Content "$env:TEMP\opencode\folio-selftest.txt"
+          if ($p.ExitCode -ne 0) { exit $p.ExitCode }

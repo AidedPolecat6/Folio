@@ -1,0 +1,9 @@
+bin/
+obj/
+*.user
+app/
+artifacts/
+*.log
+.vs/
+library.json
+workspace.json
