@@ -34,6 +34,8 @@ This is an **early release**, and the installer is currently unsigned. Windows m
 ## A closer look
 
 ### New in 0.5.0
+For the latest fixes, use **0.5.1**: it fixes an error when closing PDF tabs and adds local diagnostic logging under **Help → Open error log folder**.
+
 - Clearer PDF tabs, with one shared frame around grouped tabs.
 - Bookmark text wraps automatically; A− / A+ adjusts its size and remembers your choice.
 - Horizontal trackpad scrolling and blue outlines around PDF link areas (display-only).
