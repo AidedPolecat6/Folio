@@ -14,6 +14,8 @@ internal sealed class BookmarkSidebar : DockPanel, IDisposable
     private readonly TextBlock heading = new() { Margin = new Thickness(14, 0, 14, 12), TextWrapping = TextWrapping.Wrap, Foreground = Ui.Accent };
     public string DocumentName => heading.Text;
     public event Action? HideRequested;
+    public event Action<double>? TextSizeChanged;
+    public double TextSize { get => bookmarks.FontSize; set => bookmarks.FontSize = Math.Clamp(value, 10, 24); }
     public BookmarkSidebar()
     {
         Background = new SolidColorBrush(Color.FromRgb(26, 30, 36)); bookmarks.Background = Background;
@@ -23,6 +25,11 @@ internal sealed class BookmarkSidebar : DockPanel, IDisposable
         var labels = new StackPanel(); labels.Children.Add(title); labels.Children.Add(heading); panelHeader.Children.Add(labels);
         var headerBorder = Ui.Band(panelHeader, "#202730"); SetDock(headerBorder, Dock.Top); Children.Add(headerBorder);
         bookmarks.BorderThickness = new Thickness(0, 0, 1, 0); bookmarks.BorderBrush = Ui.Line;
+        ScrollViewer.SetHorizontalScrollBarVisibility(bookmarks, ScrollBarVisibility.Disabled);
+        var textTools = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(8, 0, 8, 4) };
+        textTools.Children.Add(Ui.Button("A−", "Smaller bookmark text", () => ChangeTextSize(-1)));
+        textTools.Children.Add(Ui.Button("A+", "Larger bookmark text", () => ChangeTextSize(1)));
+        SetDock(textTools, Dock.Top); Children.Add(textTools);
         var actions = new WrapPanel { Margin = new Thickness(8) };
         actions.Children.Add(Ui.Button("+ Bookmark", "Bookmark current page (Ctrl+B)", () => AddBookmark(false)));
         actions.Children.Add(Ui.Button("Rename", "Rename selected bookmark", RenameBookmark));
@@ -62,6 +69,11 @@ internal sealed class BookmarkSidebar : DockPanel, IDisposable
         if (document != null) document.File.Changed += RefreshBookmarks;
         RefreshBookmarks();
     }
+    private void ChangeTextSize(int delta)
+    {
+        TextSize += delta;
+        TextSizeChanged?.Invoke(TextSize);
+    }
     private void RefreshBookmarks()
     {
         bookmarks.Items.Clear(); heading.Text = document == null ? "Select a PDF" : System.IO.Path.GetFileName(File.Path);
@@ -70,7 +82,7 @@ internal sealed class BookmarkSidebar : DockPanel, IDisposable
         {
             foreach (PdfOutline outline in collection)
             {
-                var item = new TreeViewItem { Header = outline.Title, Tag = outline, IsExpanded = outline.Opened, ToolTip = outline.Title };
+                var item = new TreeViewItem { Header = new TextBlock { Text = outline.Title, TextWrapping = TextWrapping.Wrap }, Tag = outline, IsExpanded = outline.Opened, ToolTip = outline.Title };
                 parent.Items.Add(item); Add(item, outline.Outlines);
             }
         }

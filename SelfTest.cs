@@ -36,6 +36,10 @@ internal static class SelfTest
             Check(file.Engine.Count == 2, "Open multi-page PDF");
             var image = file.Engine.Render(0, 800);
             Check(image.PixelWidth == 800 && image.PixelHeight == 1200, "Native page rendering");
+            var linkBounds = file.Engine.LinkBounds(0, 800, 1200);
+            Check(linkBounds.Count == 2 && linkBounds[0].Contains(new Point(140, 350)), "Visible link bounds match clickable areas");
+            var linkPixel = new byte[4]; image.CopyPixels(new Int32Rect(40, 300, 1, 1), linkPixel, 4, 0);
+            Check(linkPixel[0] == 205 && linkPixel[1] == 125 && linkPixel[2] == 45 && !file.Dirty, "Link frames render without modifying PDF");
             var watch = Stopwatch.StartNew();
             for (var i = 0; i < 1000; i++) Check(ReferenceEquals(image, file.Engine.Render(0, 800)), "cache");
             watch.Stop(); results.RemoveAll(x => x == "PASS: cache");
@@ -117,6 +121,15 @@ internal static class SelfTest
                 group.Remove(second); var detached = new TabGroup(); detached.Add(second);
                 Check(group.Tabs.Count == 2 && detached.Tabs.Count == 1 && second.Top.Page == 1, "Ungroup preserves PDF reading position");
                 sidebar.Bind(first); Check(sidebar.DocumentName == Path.GetFileName(file.Path), "Shared bookmark sidebar binds active PDF");
+                var tree = sidebar.Children.OfType<System.Windows.Controls.TreeView>().Single();
+                var bookmarkText = (System.Windows.Controls.TextBlock)((System.Windows.Controls.TreeViewItem)tree.Items[0]).Header;
+                bookmarkText.Text = "A long bookmark title that needs several lines in a narrow sidebar";
+                var sidebarHost = new Window { Content = sidebar, Width = 240, Height = 600, ShowActivated = false, ShowInTaskbar = false };
+                sidebarHost.Show(); sidebarHost.UpdateLayout();
+                Check(bookmarkText.ActualHeight > bookmarkText.FontSize * 2 && bookmarkText.ActualWidth < tree.ActualWidth, "Long bookmarks wrap within a narrow sidebar");
+                sidebar.TextSize = 18; sidebarHost.UpdateLayout();
+                Check(bookmarkText.FontSize == 18, "Bookmark text inherits adjusted size");
+                sidebarHost.Content = null; sidebarHost.Close();
                 sidebar.Bind(null); Check(sidebar.DocumentName == "Select a PDF", "Shared sidebar clears on close");
                 group.Remove(third); group.Remove(first); detached.Remove(second);
             }
@@ -148,11 +161,26 @@ internal static class SelfTest
             restoredWindow.Close();
             var libraryPath = Path.Combine(folder, "test-library.json");
             var library = new UserLibrary(libraryPath);
+            var homeLayout = new HomePage(library, _ => { }, () => { });
+            var homeHost = new Window { Content = homeLayout, Width = 1400, Height = 800, ShowActivated = false, ShowInTaskbar = false };
+            try
+            {
+                homeHost.Show(); homeHost.UpdateLayout();
+                var topRow = ((System.Windows.Controls.StackPanel)homeLayout.Content).Children.OfType<System.Windows.Controls.Grid>().Single();
+                var leftCard = (FrameworkElement)topRow.Children[0]; var rightCard = (FrameworkElement)topRow.Children[1];
+                Check(System.Windows.Controls.Grid.GetColumn(rightCard) == 1 && leftCard.ActualWidth > rightCard.ActualWidth * 1.8, "Wide Home places recent PDFs and shortcuts side by side at roughly 2:1");
+                homeHost.Width = 800; homeHost.UpdateLayout();
+                Check(System.Windows.Controls.Grid.GetRow(rightCard) == 1 && Math.Abs(leftCard.ActualWidth - rightCard.ActualWidth) < 1, "Narrow Home stacks recent PDFs and shortcuts at full width");
+                homeHost.Width = 1400; homeHost.UpdateLayout();
+                Check(System.Windows.Controls.Grid.GetRow(rightCard) == 0 && System.Windows.Controls.Grid.GetColumn(rightCard) == 1, "Home restores side-by-side layout when widened");
+            }
+            finally { homeHost.Content = null; homeHost.Close(); }
             Check(library.Data.ScrollSpeed == 0.5, "Default scroll speed is 50 percent");
             library.Opened(path); library.Data.Recent[0] = library.Data.Recent[0] with { Pinned = true }; library.Save(); library.Opened(path);
             Check(library.Data.Recent.Count == 1 && library.Data.Recent[0].Pinned, "Recent PDFs deduplicate and retain pins when reopened");
-            library.Data.ScrollSpeed = 0.3; library.Data.Shortcuts.Add(new(folder, "Exams")); library.Data.PdfFolders.Add(new(folder, "PDFs")); library.Save();
+            library.Data.ScrollSpeed = 0.3; library.Data.BookmarkTextSize = 18; library.Data.Shortcuts.Add(new(folder, "Exams")); library.Data.PdfFolders.Add(new(folder, "PDFs")); library.Save();
             var persisted = new UserLibrary(libraryPath);
+            Check(persisted.Data.BookmarkTextSize == 18, "Bookmark text size persists");
             Check(persisted.Data.ScrollSpeed == 0.3 && persisted.Data.Shortcuts[0].Name == "Exams" && persisted.Data.PdfFolders[0].Path == folder, "Scroll setting, folder shortcuts and PDF panels persist");
             persisted.Data.Recent.Clear(); persisted.Save(); Check(File.Exists(path), "Removing a recent PDF never deletes the document");
             File.WriteAllText(Path.Combine(folder, "ignore.txt"), "not a PDF");
@@ -192,6 +220,11 @@ internal static class SelfTest
                     Check(reader.Page == 2, "Switching to single-page mode preserves page position");
                     reader.Continuous = true; Wait(() => (reader.Scroll.Content as ContinuousSurface)?.Layout != null);
                     Check(reader.Page == 2, "Switching back to continuous mode preserves page position");
+                    reader.SetZoom(2); Wait(() => reader.Scroll.ScrollableWidth > 100);
+                    reader.Scroll.ScrollToHorizontalOffset(100); Wait(() => Math.Abs(reader.Scroll.HorizontalOffset - 100) < 1);
+                    reader.ScrollHorizontally(120); Wait(() => Math.Abs(reader.Scroll.HorizontalOffset - 124) < 1);
+                    reader.ScrollHorizontally(-60); Wait(() => Math.Abs(reader.Scroll.HorizontalOffset - 112) < 1);
+                    Check(true, "Horizontal gestures preserve direction, proportional deltas and scroll speed");
                 }
                 finally { host.Content = null; host.Close(); }
             }

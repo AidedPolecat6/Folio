@@ -343,7 +343,11 @@ internal sealed class PageView : DockPanel, IDisposable
         return new Rect(new Point(Math.Clamp(startRect.X + offset.X, 0, Math.Max(0, paper.Width - startRect.Width)), Math.Clamp(startRect.Y + offset.Y, 0, Math.Max(0, paper.Height - startRect.Height))), startRect.Size);
     }
     private void MouseMovePage(object sender, MouseEventArgs e)
-    { if (anchor != null && overlay.IsMouseCaptured) ShowGhost(DragRect(e.GetPosition(overlay))); }
+    {
+        if (anchor != null && overlay.IsMouseCaptured) ShowGhost(DragRect(e.GetPosition(overlay)));
+        else if (draw.IsChecked != true) overlay.Cursor = File.Engine.Link(Page, e.GetPosition(overlay), (int)paper.Width, (int)paper.Height) != null ? Cursors.Hand : Cursors.Arrow;
+    }
+    internal void ScrollHorizontally(int delta) => Scroll.ScrollToHorizontalOffset(Scroll.HorizontalOffset + delta / 120.0 * 48 * ScrollSpeed);
     private void MouseUpPage(object sender, MouseButtonEventArgs e)
     {
         if (anchor == null) return;

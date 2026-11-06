@@ -24,12 +24,32 @@ internal sealed class HomePage : ScrollViewer
         page.Children.Add(new TextBlock { Text = "Welcome to Folio", FontSize = 25, FontWeight = FontWeights.SemiBold });
         page.Children.Add(new TextBlock { Text = "Your recent PDFs and folders, in one place.", Foreground = Ui.Muted, Margin = new Thickness(0, 7, 0, 16) });
         restore = Ui.Button("Restore last workspace", "Reopen your previous tabs and split views", restoreWorkspace);
+        restore.Background = Ui.Surface; restore.BorderBrush = Ui.Line;
         restore.HorizontalAlignment = HorizontalAlignment.Left; page.Children.Add(restore);
         var recentSection = new StackPanel(); recentSection.Children.Add(Heading("Recent PDFs"));
         var recentScroll = new ScrollViewer { Content = recent, MaxHeight = 320, VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
-        GentleScroll(recentScroll); recentSection.Children.Add(recentScroll); page.Children.Add(Card(recentSection));
-        var shortcutSection = new StackPanel(); shortcutSection.Children.Add(Section("Folder shortcuts", "+ Add shortcut", () => AddFolder(false))); shortcutSection.Children.Add(shortcuts); page.Children.Add(Card(shortcutSection));
-        var folderSection = new StackPanel(); folderSection.Children.Add(Section("PDF folders", "+ Add PDF folder", () => AddFolder(true))); folderSection.Children.Add(folders); page.Children.Add(Card(folderSection));
+        GentleScroll(recentScroll); recentSection.Children.Add(recentScroll); var recentCard = Card(recentSection);
+        var shortcutSection = new StackPanel(); shortcutSection.Children.Add(Section("Folder shortcuts", "+ Add shortcut", () => AddFolder(false))); shortcutSection.Children.Add(shortcuts); var shortcutCard = Card(shortcutSection);
+        var top = new Grid();
+        top.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(2, GridUnitType.Star) });
+        top.ColumnDefinitions.Add(new ColumnDefinition());
+        top.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        top.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        top.Children.Add(recentCard); top.Children.Add(shortcutCard); page.Children.Add(top);
+        top.SizeChanged += (_, _) =>
+        {
+            var wide = top.ActualWidth >= 1000;
+            Grid.SetColumnSpan(recentCard, wide ? 1 : 2);
+            Grid.SetColumn(shortcutCard, wide ? 1 : 0);
+            Grid.SetRow(shortcutCard, wide ? 0 : 1);
+            Grid.SetColumnSpan(shortcutCard, wide ? 1 : 2);
+        };
+        var folderSection = new StackPanel(); folderSection.Children.Add(Section("PDF folders", "+ Add PDF folder", () => AddFolder(true))); folderSection.Children.Add(folders); var folderCard = Card(folderSection); page.Children.Add(folderCard);
+        foreach (var section in new[] { recentCard, shortcutCard, folderCard })
+        {
+            section.Background = new SolidColorBrush(Color.FromRgb(46, 51, 59));
+            section.BorderBrush = new SolidColorBrush(Color.FromRgb(83, 94, 108));
+        }
         GentleScroll(this);
         RefreshRecent(); RefreshFolders();
     }
@@ -63,6 +83,7 @@ internal sealed class HomePage : ScrollViewer
         if (library.Data.Recent.Count == 0) { recent.Children.Add(new TextBlock { Text = "Open a PDF to start your recent list.", Foreground = Ui.Muted, Margin = new Thickness(12) }); return; }
         foreach (var item in library.Data.Recent.OrderByDescending(x => x.Pinned).ThenByDescending(x => x.Opened))
         {
+            if (recent.Children.Count > 0) recent.Children.Add(new Border { Height = 1, Background = Ui.Line, Margin = new Thickness(12, 2, 12, 2) });
             var row = new DockPanel { Margin = new Thickness(0, 2, 0, 2) };
             var remove = Ui.Button("×", "Remove from this list (keeps the PDF file)", () => { library.Data.Recent.Remove(item); library.Save(); RefreshRecent(); });
             DockPanel.SetDock(remove, Dock.Right); row.Children.Add(remove);
@@ -74,7 +95,9 @@ internal sealed class HomePage : ScrollViewer
             DockPanel.SetDock(pin, Dock.Right); row.Children.Add(pin);
             var label = new StackPanel();
             label.Children.Add(new TextBlock { Text = Path.GetFileName(item.Path), TextTrimming = TextTrimming.CharacterEllipsis, FontWeight = FontWeights.SemiBold });
-            label.Children.Add(new TextBlock { Text = $"{Path.GetDirectoryName(item.Path)}   ·   {item.Opened.ToLocalTime():g}", Foreground = Ui.Muted, FontSize = 11, TextTrimming = TextTrimming.CharacterEllipsis });
+            var directory = Path.GetDirectoryName(item.Path);
+            var folderName = string.IsNullOrEmpty(directory) ? "" : new DirectoryInfo(directory).Name;
+            label.Children.Add(new TextBlock { Text = $"{folderName}   ·   {item.Opened.ToLocalTime():d}", Foreground = Ui.Muted, FontSize = 11, TextTrimming = TextTrimming.CharacterEllipsis });
             var button = Ui.Button("", item.Path, () => open(item.Path)); button.Content = label; button.HorizontalContentAlignment = HorizontalAlignment.Left;
             AutomationProperties.SetName(button, "Open " + Path.GetFileName(item.Path)); row.Children.Add(button); recent.Children.Add(row);
         }
@@ -126,6 +149,9 @@ internal sealed class HomePage : ScrollViewer
         DockPanel.SetDock(title, Dock.Top); panel.Children.Add(title);
         var searchRow = new DockPanel { Margin = new Thickness(0, 7, 0, 7) };
         var search = new TextBox { ToolTip = "Filter PDF filenames", Margin = new Thickness(0, 0, 5, 0) };
+        var searchField = new Grid(); searchField.Children.Add(search);
+        var placeholder = new TextBlock { Text = "Search folder…", Foreground = Ui.Muted, Margin = new Thickness(7, 0, 12, 0), VerticalAlignment = VerticalAlignment.Center, IsHitTestVisible = false };
+        searchField.Children.Add(placeholder);
         AutomationProperties.SetName(search, "Filter " + folder.Name);
         var status = new TextBlock { Foreground = Ui.Muted, FontSize = 11, Margin = new Thickness(0, 4, 0, 2), TextWrapping = TextWrapping.Wrap };
         DockPanel.SetDock(status, Dock.Bottom); panel.Children.Add(status);
@@ -152,9 +178,11 @@ internal sealed class HomePage : ScrollViewer
             { if (request == ticket) { paths = []; list.ItemsSource = null; status.Text = "Cannot read folder: " + e.Message; } }
             finally { if (request == ticket) refresh.IsEnabled = true; }
         }
-        refresh = Ui.Button("Refresh", "Reload PDFs in this folder", Load); DockPanel.SetDock(refresh, Dock.Right); searchRow.Children.Add(refresh); searchRow.Children.Add(search);
+        refresh = Ui.Button("Refresh", "Reload PDFs in this folder", Load); DockPanel.SetDock(refresh, Dock.Right); searchRow.Children.Add(refresh); searchRow.Children.Add(searchField);
         DockPanel.SetDock(searchRow, Dock.Top); panel.Children.Add(searchRow); panel.Children.Add(list);
-        search.TextChanged += (_, _) => Filter();
+        void UpdatePlaceholder() => placeholder.Visibility = search.Text.Length == 0 && !search.IsKeyboardFocusWithin ? Visibility.Visible : Visibility.Collapsed;
+        search.IsKeyboardFocusWithinChanged += (_, _) => UpdatePlaceholder();
+        search.TextChanged += (_, _) => { UpdatePlaceholder(); Filter(); };
         list.PreviewMouseWheel += (_, e) =>
         {
             var scroll = FindScroll(list); if (scroll == null) return;

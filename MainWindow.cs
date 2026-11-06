@@ -42,12 +42,14 @@ internal sealed class MainWindow : Window
     {
         this.workspacePath = workspacePath ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Folio", "workspace.json");
         library = new UserLibrary(Path.Combine(Path.GetDirectoryName(this.workspacePath)!, "library.json"));
+        bookmarks.TextSize = library.Data.BookmarkTextSize;
+        bookmarks.TextSizeChanged += size => { library.Data.BookmarkTextSize = size; library.Save(); };
         home = new HomePage(library, path => Open(path), RestoreWorkspace);
         Title = "Folio"; Width = 1400; Height = 900; MinWidth = 800; MinHeight = 480;
         Icon = new System.Windows.Media.Imaging.BitmapImage(new Uri("pack://application:,,,/Assets/Folio.ico"));
         Background = new SolidColorBrush(Color.FromRgb(32, 34, 38)); Foreground = new SolidColorBrush(Color.FromRgb(230, 232, 237));
         FontFamily = new FontFamily("Segoe UI"); FontSize = 13;
-        SourceInitialized += (_, _) => { var on = 1; DwmSetWindowAttribute(new WindowInteropHelper(this).Handle, 20, ref on, sizeof(int)); };
+        SourceInitialized += (_, _) => { var on = 1; var handle = new WindowInteropHelper(this).Handle; DwmSetWindowAttribute(handle, 20, ref on, sizeof(int)); HwndSource.FromHwnd(handle)?.AddHook(HorizontalWheel); };
         var root = new DockPanel { Background = Background }; Content = root;
         var menu = new Menu { Background = (Brush)new BrushConverter().ConvertFromString("#191B1F")!, Padding = new Thickness(8, 1, 8, 1) };
         var file = new MenuItem { Header = "_File" };
@@ -140,7 +142,8 @@ internal sealed class MainWindow : Window
                 var label = new TextBlock { MaxWidth = 195, TextTrimming = TextTrimming.CharacterEllipsis, Margin = new Thickness(10, 7, 4, 7), VerticalAlignment = VerticalAlignment.Center };
                 inner.Children.Add(label);
                 var close = Ui.Button("×", "Close this PDF · Ctrl+W", () => CloseTab(doc)); close.Padding = new Thickness(7, 2, 7, 2); inner.Children.Add(close);
-                var head = new Border { Child = inner, CornerRadius = new CornerRadius(8), BorderThickness = new Thickness(2), AllowDrop = true, Focusable = true, Cursor = Cursors.Hand };
+                var head = new Border { Child = inner, CornerRadius = new CornerRadius(8), BorderThickness = new Thickness(2), Margin = new Thickness(3, 0, 3, 0), AllowDrop = true, Focusable = true, Cursor = Cursors.Hand };
+                head.MouseEnter += (_, _) => UpdateTitle(); head.MouseLeave += (_, _) => UpdateTitle();
                 headers[doc] = head; row.Children.Add(head);
                 AutomationProperties.SetName(head, System.IO.Path.GetFileName(doc.File.Path));
                 var context = new ContextMenu();
@@ -187,6 +190,22 @@ internal sealed class MainWindow : Window
         UpdateTitle();
     }
     private static int Edge(FrameworkElement head, double x) => x < head.ActualWidth * 0.2 ? -1 : x > head.ActualWidth * 0.8 ? 1 : 0;
+    private IntPtr HorizontalWheel(IntPtr hwnd, int message, IntPtr wParam, IntPtr lParam, ref bool handled)
+    {
+        if (message != 0x020E) return IntPtr.Zero; // WM_MOUSEHWHEEL is not exposed by WPF's MouseWheel event.
+        var packed = lParam.ToInt64();
+        var point = PointFromScreen(new Point((short)(packed & 0xffff), (short)((packed >> 16) & 0xffff)));
+        var node = InputHitTest(point) as DependencyObject;
+        while (node != null)
+        {
+            if (node is PageView view)
+            {
+                view.ScrollHorizontally((short)((wParam.ToInt64() >> 16) & 0xffff)); handled = true; break;
+            }
+            node = node is Visual ? VisualTreeHelper.GetParent(node) : LogicalTreeHelper.GetParent(node);
+        }
+        return IntPtr.Zero;
+    }
     private static bool IsButton(DependencyObject? node)
     {
         while (node != null) { if (node is ButtonBase) return true; node = VisualTreeHelper.GetParent(node); }
@@ -194,7 +213,8 @@ internal sealed class MainWindow : Window
     }
     private void ClearDropFeedback()
     {
-        foreach (var (doc, head) in headers) { head.BorderThickness = new Thickness(2); head.BorderBrush = Brushes.Transparent; }
+        foreach (var head in headers.Values) head.BorderThickness = new Thickness(2);
+        UpdateTitle();
         dropHint.Text = "Drag a tab onto another to read side by side";
     }
     private void RemoveFromGroup(DocumentTab tab)
@@ -257,12 +277,13 @@ internal sealed class MainWindow : Window
         {
             ((TextBlock)((StackPanel)head.Child).Children[0]).Text = Path.GetFileName(doc.File.Path) + (doc.File.Dirty ? " •" : "");
             head.ToolTip = doc.File.Path;
-            head.Background = doc == Current ? new SolidColorBrush(Color.FromRgb(67, 73, 83)) : Brushes.Transparent;
+            head.Background = doc == Current ? new SolidColorBrush(Color.FromRgb(52, 77, 102)) : head.IsMouseOver ? new SolidColorBrush(Color.FromRgb(65, 69, 77)) : Ui.Surface;
+            head.BorderBrush = GroupOf(doc).Tabs.Count > 1 ? Brushes.Transparent : doc == Current || head.IsKeyboardFocused ? Ui.Accent : Ui.Line;
         }
         foreach (var (group, border) in groupHeaders)
         {
             border.Background = new SolidColorBrush(!homeVisible && group == activeGroup ? Color.FromRgb(44, 48, 54) : Color.FromRgb(26, 28, 32));
-            border.BorderBrush = !homeVisible && group == activeGroup ? new SolidColorBrush(Color.FromRgb(76, 98, 122)) : Brushes.Transparent;
+            border.BorderBrush = group.Tabs.Count > 1 ? (!homeVisible && group == activeGroup ? Ui.Accent : Ui.Line) : Brushes.Transparent;
         }
         Title = Current == null ? "Folio — Home" : $"{Path.GetFileName(Current.File.Path)}{(Current.File.Dirty ? " •" : "")} — Folio";
     }

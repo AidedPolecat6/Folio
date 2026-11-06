@@ -13,6 +13,7 @@ try {
     $version = ([xml](Get-Content Folio.csproj)).Project.PropertyGroup.Version
     $zip = Join-Path $root "artifacts/Folio-$version-win-x64-portable.zip"
     Compress-Archive -Path artifacts/publish/* -DestinationPath $zip -Force
-    $files = @(Get-ChildItem artifacts/installer -Filter 'Folio-Setup-*.exe') + @(Get-Item $zip)
+    $installerVersion = (Get-Item artifacts/publish/Folio.exe).VersionInfo.FileVersion
+    $files = @(Get-Item "artifacts/installer/Folio-Setup-$installerVersion-win-x64.exe") + @(Get-Item $zip)
     $files | ForEach-Object { '{0}  {1}' -f (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant(), $_.Name } | Set-Content artifacts/SHA256SUMS.txt
 } finally { Pop-Location }

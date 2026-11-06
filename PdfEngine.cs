@@ -81,8 +81,18 @@ internal sealed class PdfEngine : IDisposable
                 if (bitmap == IntPtr.Zero) throw new OutOfMemoryException("Unable to allocate a page image.");
                 Native.FPDFBitmap_FillRect(bitmap, 0, 0, width, height, 0xffffffff);
                 Native.FPDF_RenderPageBitmap(bitmap, page, 0, 0, width, height, 0, 1);
+                foreach (var bounds in LinkBounds(index, width, height))
+                {
+                    var left = Math.Clamp((int)bounds.Left, 0, width); var top = Math.Clamp((int)bounds.Top, 0, height);
+                    var right = Math.Clamp((int)bounds.Right, 0, width); var bottom = Math.Clamp((int)bounds.Bottom, 0, height);
+                    if (right <= left || bottom <= top) continue;
+                    Native.FPDFBitmap_FillRect(bitmap, left, top, right - left, 1, 0xff2d7dcd);
+                    Native.FPDFBitmap_FillRect(bitmap, left, bottom - 1, right - left, 1, 0xff2d7dcd);
+                    Native.FPDFBitmap_FillRect(bitmap, left, top, 1, bottom - top, 0xff2d7dcd);
+                    Native.FPDFBitmap_FillRect(bitmap, right - 1, top, 1, bottom - top, 0xff2d7dcd);
+                }
                 var stride = Native.FPDFBitmap_GetStride(bitmap);
-                var image = BitmapSource.Create(width, height, 96, 96, PixelFormats.Bgr32, null,
+                BitmapSource image = BitmapSource.Create(width, height, 96, 96, PixelFormats.Bgr32, null,
                     Native.FPDFBitmap_GetBuffer(bitmap), stride * height, stride);
                 image.Freeze();
                 while (order.Count > 0 && cacheBytes + stride * (long)height > 64 * 1024 * 1024)
@@ -145,6 +155,26 @@ internal sealed class PdfEngine : IDisposable
             finally { Native.FPDF_ClosePage(page); }
         }
     }
+    public List<Rect> LinkBounds(int index, int width, int height)
+    {
+        lock (Gate)
+        {
+            var page = Page(index);
+            try
+            {
+                var result = new List<Rect>(); var position = 0;
+                while (Native.FPDFLink_Enumerate(page, ref position, out var link) != 0)
+                {
+                    if (Native.FPDFLink_GetAnnotRect(link, out var rect) == 0) continue;
+                    Native.FPDF_PageToDevice(page, 0, 0, width, height, 0, rect.Left, rect.Top, out var x1, out var y1);
+                    Native.FPDF_PageToDevice(page, 0, 0, width, height, 0, rect.Right, rect.Bottom, out var x2, out var y2);
+                    result.Add(new Rect(new Point(x1, y1), new Point(x2, y2)));
+                }
+                return result;
+            }
+            finally { Native.FPDF_ClosePage(page); }
+        }
+    }
     public Point ConvertPoint(int index, Point point, int width, int height, bool toPdf)
     {
         lock (Gate)
@@ -201,6 +231,9 @@ internal static class Native
     [DllImport(Dll)] internal static extern int FPDF_DeviceToPage(IntPtr page, int x, int y, int width, int height, int rotate, int dx, int dy, out double px, out double py);
     [DllImport(Dll)] internal static extern int FPDF_PageToDevice(IntPtr page, int x, int y, int width, int height, int rotate, double px, double py, out int dx, out int dy);
     [DllImport(Dll)] internal static extern IntPtr FPDFLink_GetLinkAtPoint(IntPtr page, double x, double y);
+    [StructLayout(LayoutKind.Sequential)] internal struct LinkRect { public float Left, Top, Right, Bottom; }
+    [DllImport(Dll)] internal static extern int FPDFLink_Enumerate(IntPtr page, ref int position, out IntPtr link);
+    [DllImport(Dll)] internal static extern int FPDFLink_GetAnnotRect(IntPtr link, out LinkRect rect);
     [DllImport(Dll)] internal static extern IntPtr FPDFLink_GetDest(IntPtr doc, IntPtr link);
     [DllImport(Dll)] internal static extern IntPtr FPDFLink_GetAction(IntPtr link);
     [DllImport(Dll)] internal static extern IntPtr FPDFAction_GetDest(IntPtr doc, IntPtr action);

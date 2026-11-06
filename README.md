@@ -33,6 +33,13 @@ This is an **early release**, and the installer is currently unsigned. Windows m
 
 ## A closer look
 
+### New in 0.5.0
+- Clearer PDF tabs, with one shared frame around grouped tabs.
+- Bookmark text wraps automatically; A− / A+ adjusts its size and remembers your choice.
+- Horizontal trackpad scrolling and blue outlines around PDF link areas (display-only).
+- A cleaner Home screen with responsive side-by-side sections, recent-file dividers, shorter folder labels and search placeholders.
+- Fully dark context menus, fixing the white strip in folder options.
+
 ### Start where you left off
 ![Folio home with fictional recent documents and folder panels](docs/images/home.png)
 
