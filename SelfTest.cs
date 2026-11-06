@@ -161,7 +161,8 @@ internal static class SelfTest
             restoredWindow.Close();
             var libraryPath = Path.Combine(folder, "test-library.json");
             var library = new UserLibrary(libraryPath);
-            var homeLayout = new HomePage(library, _ => { }, () => { });
+            // Fix the content width so a small CI desktop cannot constrain the layout under test.
+            var homeLayout = new HomePage(library, _ => { }, () => { }) { Width = 1400 };
             var homeHost = new Window { Content = homeLayout, Width = 1400, Height = 800, ShowActivated = false, ShowInTaskbar = false };
             try
             {
@@ -169,9 +170,9 @@ internal static class SelfTest
                 var topRow = ((System.Windows.Controls.StackPanel)homeLayout.Content).Children.OfType<System.Windows.Controls.Grid>().Single();
                 var leftCard = (FrameworkElement)topRow.Children[0]; var rightCard = (FrameworkElement)topRow.Children[1];
                 Check(System.Windows.Controls.Grid.GetColumn(rightCard) == 1 && leftCard.ActualWidth > rightCard.ActualWidth * 1.8, "Wide Home places recent PDFs and shortcuts side by side at roughly 2:1");
-                homeHost.Width = 800; homeHost.UpdateLayout();
+                homeLayout.Width = 800; homeHost.UpdateLayout();
                 Check(System.Windows.Controls.Grid.GetRow(rightCard) == 1 && Math.Abs(leftCard.ActualWidth - rightCard.ActualWidth) < 1, "Narrow Home stacks recent PDFs and shortcuts at full width");
-                homeHost.Width = 1400; homeHost.UpdateLayout();
+                homeLayout.Width = 1400; homeHost.UpdateLayout();
                 Check(System.Windows.Controls.Grid.GetRow(rightCard) == 0 && System.Windows.Controls.Grid.GetColumn(rightCard) == 1, "Home restores side-by-side layout when widened");
             }
             finally { homeHost.Content = null; homeHost.Close(); }
