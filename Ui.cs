@@ -31,7 +31,7 @@ internal static class Ui
     public static void Run(Action action)
     {
         try { action(); }
-        catch (Exception e) { MessageBox.Show(e.Message, "Folio", MessageBoxButton.OK, MessageBoxImage.Error); }
+        catch (Exception e) { ErrorLog.Write(e, "UI action"); MessageBox.Show(e.Message, "Folio", MessageBoxButton.OK, MessageBoxImage.Error); }
     }
     public static string? Prompt(string title, string initial)
     {

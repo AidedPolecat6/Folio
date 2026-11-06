@@ -107,7 +107,7 @@ internal sealed class ContinuousSurface : Canvas
             }
         }
         catch (ObjectDisposedException) { }
-        catch (Exception e) { ToolTip = "Could not render page: " + e.Message; }
+        catch (Exception e) { ErrorLog.Write(e, "Render continuous PDF pages"); ToolTip = "Could not render page: " + e.Message; }
         finally { rendering = false; if (pending && Layout != null && scroll.Content == this) RenderVisible(); }
     }
     public void Release()

@@ -25,7 +25,7 @@ internal sealed class UserLibrary
         this.path = path;
         try { Data = File.Exists(path) ? JsonSerializer.Deserialize<LibraryData>(File.ReadAllText(path)) ?? new() : new(); }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException or JsonException)
-        { Data = new(); LoadError = $"Could not read Folio's settings: {e.Message}\nThe existing file has been preserved: {path}"; }
+        { ErrorLog.Write(e, "Read settings"); Data = new(); LoadError = $"Could not read Folio's settings: {e.Message}\nThe existing file has been preserved: {path}"; }
         Data.ScrollSpeed = double.IsFinite(Data.ScrollSpeed) ? Math.Clamp(Data.ScrollSpeed, 0.1, 2) : 0.5;
         Data.BookmarkTextSize = double.IsFinite(Data.BookmarkTextSize) ? Math.Clamp(Data.BookmarkTextSize, 10, 24) : 12;
         Data.Recent = (Data.Recent ?? new()).Where(x => x != null && !string.IsNullOrWhiteSpace(x.Path)).ToList();

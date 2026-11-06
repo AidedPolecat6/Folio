@@ -98,6 +98,8 @@ Start-Process .\bin\Release\net8.0-windows\win-x64\Folio.exe -ArgumentList '--de
 
 Bug reports are welcome. Include your Folio version, Windows version, steps to reproduce and whether it affects a small local PDF. Please remove private content before attaching sample documents or screenshots.
 
+Errors are logged locally in `%LOCALAPPDATA%\Folio\Logs\errors.log`; use **Help → Open error log folder** to find it. Entries include time, version, operation and exception details. The log rotates at 1 MB and keeps one previous file (`errors.log.old`). Nothing is uploaded automatically. Error messages can include local file paths, so review logs before sharing them.
+
 ## License
 
 Folio is [MIT licensed](LICENSE). PDFium, PDFsharp and the bundled runtime retain their upstream licenses; see [third-party notices](THIRD-PARTY-NOTICES.md) and [`licenses/`](licenses/).

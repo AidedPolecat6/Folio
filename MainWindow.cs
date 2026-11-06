@@ -73,6 +73,7 @@ internal sealed class MainWindow : Window
         view.Items.Add(Ui.Menu("Toggle bookmarks sidebar", ToggleBookmarks)); menu.Items.Add(view);
         menu.Items.Add(Ui.Menu("_Settings", ShowSettings));
         var help = new MenuItem { Header = "_Help" };
+        help.Items.Add(Ui.Menu("Open error log folder", () => { Directory.CreateDirectory(ErrorLog.Folder); System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(ErrorLog.Folder) { UseShellExecute = true }); }));
         help.Items.Add(Ui.Menu("Getting started & keyboard shortcuts    F1", ShowHelp));
         help.Items.Add(Ui.Menu("About Folio", () => MessageBox.Show("Folio — a focused PDF workspace\n\nDrop a tab onto another to group them side by side.\nDrop on an edge to reorder; drop in the empty tab strip to ungroup.\nCtrl+Tab cycles documents in a group, or workspaces for a single tab.\nCtrl+Shift+S toggles a top/bottom view of the active PDF.\n\nPDFium and PDFsharp. See the included licenses.", "Folio"))); menu.Items.Add(help);
         var menuBand = Ui.Band(menu, "#191B1F"); DockPanel.SetDock(menuBand, Dock.Top); root.Children.Add(menuBand);
@@ -109,7 +110,7 @@ internal sealed class MainWindow : Window
         Closing += (_, e) =>
         {
             foreach (var f in files.ToArray()) if (!ConfirmSave(f)) { e.Cancel = true; return; }
-            try { SaveWorkspace(); } catch (Exception error) { MessageBox.Show(this, "Could not remember the workspace: " + error.Message, "Folio"); }
+            try { SaveWorkspace(); } catch (Exception error) { ErrorLog.Write(error, "Save workspace"); MessageBox.Show(this, "Could not remember the workspace: " + error.Message, "Folio"); }
         };
         Closed += (_, _) => { bookmarks.Dispose(); foreach (var tab in AllTabs()) tab.Dispose(); foreach (var f in files) f.Dispose(); };
         ShowHome();
@@ -273,12 +274,14 @@ internal sealed class MainWindow : Window
     {
         foreach (var command in documentCommands) command.Visibility = homeVisible ? Visibility.Collapsed : Visibility.Visible;
         if (homeButton != null) { homeButton.Background = homeVisible ? new SolidColorBrush(Color.FromRgb(62, 79, 101)) : Brushes.Transparent; homeButton.BorderBrush = homeVisible ? Ui.Accent : Brushes.Transparent; }
-        foreach (var (doc, head) in headers)
+        foreach (var group in groups)
+        foreach (var doc in group.Tabs)
         {
+            if (!headers.TryGetValue(doc, out var head)) continue;
             ((TextBlock)((StackPanel)head.Child).Children[0]).Text = Path.GetFileName(doc.File.Path) + (doc.File.Dirty ? " •" : "");
             head.ToolTip = doc.File.Path;
             head.Background = doc == Current ? new SolidColorBrush(Color.FromRgb(52, 77, 102)) : head.IsMouseOver ? new SolidColorBrush(Color.FromRgb(65, 69, 77)) : Ui.Surface;
-            head.BorderBrush = GroupOf(doc).Tabs.Count > 1 ? Brushes.Transparent : doc == Current || head.IsKeyboardFocused ? Ui.Accent : Ui.Line;
+            head.BorderBrush = group.Tabs.Count > 1 ? Brushes.Transparent : doc == Current || head.IsKeyboardFocused ? Ui.Accent : Ui.Line;
         }
         foreach (var (group, border) in groupHeaders)
         {
@@ -370,9 +373,9 @@ internal sealed class MainWindow : Window
         var answer = MessageBox.Show(this, $"Save changes to {Path.GetFileName(file.Path)}?", "Folio", MessageBoxButton.YesNoCancel, MessageBoxImage.Question);
         if (answer == MessageBoxResult.Cancel) return false;
         if (answer == MessageBoxResult.No) return true;
-        try { return SaveFile(file, false); } catch (Exception e) { MessageBox.Show(this, e.Message, "Folio"); return false; }
+        try { return SaveFile(file, false); } catch (Exception e) { ErrorLog.Write(e, "Save PDF before closing"); MessageBox.Show(this, e.Message, "Folio"); return false; }
     }
-    private void CloseTab(DocumentTab? tab)
+    internal void CloseTab(DocumentTab? tab)
     {
         if (tab == null) return;
         var f = tab.File; var last = AllTabs().Count(t => t.File == f) == 1;
@@ -446,7 +449,7 @@ internal sealed class MainWindow : Window
             }
             workspaceRestored = true; home.SetRestoreEnabled(false);
         }
-        catch (Exception e) { MessageBox.Show(this, "Could not restore the previous workspace: " + e.Message, "Folio"); }
+        catch (Exception e) { ErrorLog.Write(e, "Restore workspace"); MessageBox.Show(this, "Could not restore the previous workspace: " + e.Message, "Folio"); }
     }
     private void Keys(object sender, KeyEventArgs e)
     {

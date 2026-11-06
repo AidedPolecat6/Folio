@@ -22,13 +22,14 @@ internal static class Program
                 client.Connect(3000);
                 using var writer = new StreamWriter(client); writer.WriteLine(JsonSerializer.Serialize(args.Select(Path.GetFullPath).ToArray()));
             }
-            catch (Exception e) { MessageBox.Show(e.Message, "Folio"); }
+            catch (Exception e) { ErrorLog.Write(e, "Send files to existing instance"); MessageBox.Show(e.Message, "Folio"); }
             return;
         }
         var app = new Application();
         app.Resources.MergedDictionaries.Add(new ResourceDictionary { Source = new Uri("Theme.xaml", UriKind.Relative) });
+        app.DispatcherUnhandledException += (_, e) => { ErrorLog.Write(e.Exception, "Unhandled UI exception"); MessageBox.Show(e.Exception.Message, "Folio"); e.Handled = true; };
+        AppDomain.CurrentDomain.UnhandledException += (_, e) => { if (e.ExceptionObject is Exception error) ErrorLog.Write(error, "Unhandled process exception"); };
         var window = new MainWindow();
-        app.DispatcherUnhandledException += (_, e) => { MessageBox.Show(e.Exception.Message, "Folio"); e.Handled = true; };
         window.Loaded += (_, _) => { foreach (var path in args) window.Open(path); };
         _ = Task.Run(async () =>
         {
@@ -49,7 +50,7 @@ internal static class Program
                         window.Activate();
                     });
                 }
-                catch (Exception e) when (e is IOException or JsonException) { }
+                catch (Exception e) when (e is IOException or JsonException) { ErrorLog.Write(e, "Receive files from another instance"); }
             }
         });
         app.Run(window);

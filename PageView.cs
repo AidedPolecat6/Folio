@@ -183,7 +183,7 @@ internal sealed class PageView : DockPanel, IDisposable
             else status.Text = $"No match for “{query}” (scanned pages need OCR).";
         }
         catch (ObjectDisposedException) { }
-        catch (Exception e) { status.Text = e.Message; }
+        catch (Exception e) { ErrorLog.Write(e, "Search PDF"); status.Text = e.Message; }
     }
     public async void Refresh()
     {
@@ -234,7 +234,7 @@ internal sealed class PageView : DockPanel, IDisposable
             status.Text = $"{Zoom:P0}  ·  Ctrl+B bookmark  ·  Ctrl+Shift+S split  ·  Ctrl+wheel zoom";
         }
         catch (ObjectDisposedException) { }
-        catch (Exception e) { if (ticket == request) status.Text = e.Message; }
+        catch (Exception e) { ErrorLog.Write(e, "Render PDF page"); if (ticket == request) status.Text = e.Message; }
     }
     private Point Convert(Point point, bool toPdf) => File.Engine.ConvertPoint(Page, point, Math.Max(1, (int)paper.Width), Math.Max(1, (int)paper.Height), toPdf);
     private Rect Bounds(PdfAnnotation a)

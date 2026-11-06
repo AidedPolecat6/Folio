@@ -159,6 +159,31 @@ internal static class SelfTest
             restoredWindow.Open(resizedPath);
             Check(!restoredWindow.IsHomeVisible && restoredWindow.Current?.File.Path == resizedPath, "Opening a PDF directly leaves home and activates its tab");
             restoredWindow.Close();
+            var closingWindow = new MainWindow(Path.Combine(folder, "closing-workspace.json"));
+            closingWindow.Open(path); var closeFirst = closingWindow.Current!;
+            closingWindow.Open(output); var closeSecond = closingWindow.Current!;
+            closingWindow.CloseTab(closeSecond);
+            Check(closingWindow.Current == closeFirst, "Closing active PDF updates headers without referencing removed tabs");
+            closingWindow.Open(output); closeSecond = closingWindow.Current!;
+            closingWindow.CloseTab(closeFirst);
+            Check(closingWindow.Current == closeSecond, "Closing inactive PDF retains active PDF");
+            closingWindow.Open(path); closeFirst = closingWindow.Current!;
+            closingWindow.Merge(closeFirst, closeSecond); closingWindow.CloseTab(closeFirst);
+            Check(closingWindow.Current == closeSecond, "Closing grouped PDF retains remaining group member");
+            closingWindow.CloseTab(closeSecond);
+            Check(closingWindow.IsHomeVisible && closingWindow.Current == null, "Closing final PDF returns Home without stale headers");
+            closingWindow.Close();
+            var logPath = Path.Combine(folder, "logs", "errors.log");
+            Exception loggedError;
+            try { throw new InvalidOperationException("Test diagnostic"); } catch (Exception e) { loggedError = e; }
+            ErrorLog.Write(loggedError, "Test operation", logPath);
+            var diagnostic = File.ReadAllText(logPath);
+            Check(diagnostic.Contains("Test operation") && diagnostic.Contains("InvalidOperationException") && diagnostic.Contains("SelfTest.Run") && diagnostic.Contains("Folio "), "Error log includes context, version and stack trace");
+            File.WriteAllText(logPath, new string('x', 1024 * 1024));
+            ErrorLog.Write(loggedError, "After rotation", logPath);
+            Check(new FileInfo(logPath + ".old").Length == 1024 * 1024 && File.ReadAllText(logPath).Contains("After rotation"), "Error log rotates and retains the previous file");
+            ErrorLog.Write(loggedError, "Unavailable log directory", Path.Combine(path, "errors.log"));
+            Check(true, "Logging failure does not throw over the original error");
             var libraryPath = Path.Combine(folder, "test-library.json");
             var library = new UserLibrary(libraryPath);
             // Fix the content width so a small CI desktop cannot constrain the layout under test.

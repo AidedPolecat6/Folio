@@ -175,7 +175,7 @@ internal sealed class HomePage : ScrollViewer
                 if (request != ticket) return; paths = found; loaded = true; Filter();
             }
             catch (Exception e) when (e is IOException or UnauthorizedAccessException or ArgumentException)
-            { if (request == ticket) { paths = []; list.ItemsSource = null; status.Text = "Cannot read folder: " + e.Message; } }
+            { ErrorLog.Write(e, "Read PDF folder"); if (request == ticket) { paths = []; list.ItemsSource = null; status.Text = "Cannot read folder: " + e.Message; } }
             finally { if (request == ticket) refresh.IsEnabled = true; }
         }
         refresh = Ui.Button("Refresh", "Reload PDFs in this folder", Load); DockPanel.SetDock(refresh, Dock.Right); searchRow.Children.Add(refresh); searchRow.Children.Add(searchField);
